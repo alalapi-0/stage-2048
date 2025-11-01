@@ -52,7 +52,7 @@ const COLORS = {
   2048: { bg: '#3c3a32', fg: '#f9f6f2' }
 };
 
-const ANIMATE = false;                                 // 全局动画开关，默认关闭以兼顾性能
+const ANIMATE = true;                                  // 全局动画逻辑开关，配合 SETTINGS.animate 决定是否执行淡入
 
 // 读取页面元素引用
 const canvas = document.getElementById('game');        // 画布节点
