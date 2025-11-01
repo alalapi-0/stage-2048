@@ -15,18 +15,28 @@
     /* 信息与按钮区域的行布局 */
     .row { display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap; }
     /* 简单按钮样式 */
-    button { padding: 6px 12px; border: 1px solid #bbb; border-radius: 6px; background: #fff; cursor: pointer; }
+    button { padding: 6px 12px; border: 1px solid #bbb; border-radius: 6px; background: #fff; cursor: pointer; color: #333; }
+    /* 自定义文件按钮的包装，使其看起来像普通按钮 */
+    .import-btn { display: inline-flex; align-items: center; justify-content: center; padding: 6px 12px; border: 1px solid #bbb; border-radius: 6px; background: #fff; cursor: pointer; color: #333; }
+    /* 隐藏真实的文件输入控件，仅保留可点击的标签 */
+    .import-btn input { display: none; }
     /* 文本颜色与字号 */
     .meta, .score { color: #776e65; }
+    /* 设置面板容器样式 */
+    .panel { width: min(520px, 100%); background: rgba(255, 255, 255, 0.85); border: 1px solid #e0d8c9; border-radius: 10px; padding: 12px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; color: #776e65; }
+    /* 设置面板标题样式 */
+    .panel h2 { margin: 0; font-size: 16px; font-weight: 700; color: #776e65; }
+    /* 表单布局：两列自适应 */
+    .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+    /* 表单字段的标签样式 */
+    .settings-field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+    /* 输入框统一样式 */
+    .settings-field input, .settings-field select { padding: 6px 8px; border: 1px solid #bbb; border-radius: 4px; font-size: 14px; box-sizing: border-box; }
+    /* 复选框行保持水平排列 */
+    .settings-field.inline { flex-direction: row; align-items: center; }
+    /* 面板底部说明文案 */
+    .panel p { margin: 0; font-size: 12px; color: #998675; line-height: 1.4; }
   </style>
-  <script>
-    // 可选：通过全局对象覆盖参数，便于无改代码调试
-    // window.CANVAS_2048_CONFIG = {
-    //   CANVAS_CSS_SIZE: 420,
-    //   GAP: 10,
-    //   LEVELS: { startSize: 2, carryScore: true, randomTileWeightsBySize: { 4: { 2: 0.9, 4: 0.1 } } }
-    // };
-  </script>
 </head>
 <body>
   <!-- 外层自适应容器 -->
@@ -50,9 +60,51 @@
       <span id="best" class="score">最佳 0</span>
     </div>
 
-    <!-- 操作区：重开本关 -->
+    <!-- 操作区：重开本关 / 重置进度 / 清空最佳分 -->
     <div class="row">
       <button id="btn-new">重开本关</button>
+      <button id="btn-reset-progress">重置进度</button>
+      <button id="btn-clear-best">清空最佳分</button>
+    </div>
+
+    <!-- 设置面板：包含表单字段与导入导出按钮 -->
+    <div class="panel">
+      <h2>设置与持久化</h2>
+      <form id="settings-form" class="settings" autocomplete="off">
+        <div class="settings-grid">
+          <label class="settings-field">
+            <span>画布尺寸（px）</span>
+            <input id="input-canvas-size" type="number" min="300" max="800" step="10" value="480" />
+          </label>
+          <label class="settings-field">
+            <span>格子间隙（px）</span>
+            <input id="input-gap" type="number" min="4" max="40" step="1" value="12" />
+          </label>
+          <label class="settings-field">
+            <span>起始尺寸（最小 2）</span>
+            <input id="input-start-size" type="number" min="2" max="10" step="1" value="2" />
+          </label>
+          <label class="settings-field inline">
+            <input id="input-carry-score" type="checkbox" checked />
+            <span>累计总分</span>
+          </label>
+          <label class="settings-field">
+            <span>目标函数</span>
+            <select id="input-target-fn">
+              <option value="power">power（2 的幂）</option>
+              <option value="fibonacci">fibonacci（示例）</option>
+            </select>
+          </label>
+        </div>
+        <div class="row" style="margin-top: 8px;">
+          <button type="button" id="btn-export">导出设置/进度（JSON）</button>
+          <label class="import-btn">
+            <span>导入设置/进度（选择文件）</span>
+            <input type="file" id="input-import" accept="application/json" />
+          </label>
+        </div>
+      </form>
+      <p>提示：修改表单会立即保存并重置当前关卡；导入与重置操作会覆盖现有进度与设置。</p>
     </div>
   </div>
 
