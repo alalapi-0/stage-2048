@@ -1,0 +1,41 @@
+/* /web/a11y.css */
+/* 说明：提供辅助功能样式，包括隐藏朗读区域、可视化焦点与徽章高对比度。 */
+
+.sr-only {                                         /* 屏幕阅读器专用的隐藏文本样式 */
+  position: absolute;                              /* 脱离文档流以避免占位 */
+  width: 1px;                                      /* 压缩为 1px */
+  height: 1px;                                     /* 压缩为 1px */
+  padding: 0;                                      /* 移除内边距 */
+  margin: -1px;                                    /* 通过负外边距完全隐藏 */
+  overflow: hidden;                                /* 防止内容溢出 */
+  clip: rect(0, 0, 0, 0);                          /* 裁剪可见区域 */
+  white-space: nowrap;                             /* 防止换行造成可见区域 */
+  border: 0;                                       /* 移除边框 */
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {                              /* 统一交互控件的焦点外观 */
+  outline: 2px solid #2b8a3e;                       /* 使用高对比绿色描边 */
+  outline-offset: 2px;                              /* 外移描边避免遮挡内容 */
+}
+
+#achv {                                             /* 成就徽章区域的高对比度设置 */
+  min-height: 24px;                                 /* 预留空间避免切换跳动 */
+  font-weight: 600;                                 /* 提升文字可读性 */
+  color: #4a3d2c;                                   /* 采用深色文字提高对比 */
+}
+
+.settings-field.inline input[type="checkbox"] {   /* 行内复选框的间距优化 */
+  margin-right: 6px;                                /* 让标签与复选框保持间隔 */
+}
+
+.settings-field.inline input[type="checkbox"]:focus-visible + span {
+  text-decoration: underline;                      /* 焦点时突出复选框对应文字 */
+}
+
+label.settings-field.inline {                       /* 行内标签的对齐处理 */
+  display: inline-flex;                             /* 使用弹性布局保持水平排列 */
+  align-items: center;                              /* 垂直居中复选框与文字 */
+  gap: 6px;                                         /* 控制控件间距 */
+}

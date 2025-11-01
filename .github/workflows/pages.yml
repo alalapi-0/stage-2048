@@ -1,0 +1,28 @@
+name: "部署 Stage2048 Web 到 GitHub Pages" # 工作流名称，便于在 Actions 中识别
+on: # 定义触发条件
+  push: # 当代码推送时触发
+    branches: # 指定分支列表
+      - main # 仅在主分支上运行部署
+permissions: # 配置工作流所需权限
+  contents: read # 读取代码仓库内容
+  pages: write # 写入 GitHub Pages 站点
+  id-token: write # 生成部署所需的 OIDC 令牌
+concurrency: # 防止重复部署冲突
+  group: "pages" # 使用统一的并发分组
+  cancel-in-progress: true # 新任务触发时取消旧任务
+jobs: # 作业定义
+  deploy: # 单一部署作业
+    environment: # 指定部署环境
+      name: github-pages # 对应仓库的 Pages 环境
+      url: ${{ steps.deployment.outputs.page_url }} # 从部署步骤读取站点链接
+    runs-on: ubuntu-latest # 使用最新版 Ubuntu 运行器
+    steps: # 作业包含的步骤
+      - name: 检出代码 # 拉取仓库内容
+        uses: actions/checkout@v4 # 使用官方 checkout 动作
+      - name: 上传静态文件制品 # 将 /web 目录打包为制品
+        uses: actions/upload-pages-artifact@v3 # 使用官方上传动作
+        with: # 上传参数
+          path: ./web # 指定要发布的目录
+      - name: 部署到 GitHub Pages # 触发 Pages 发布
+        id: deployment # 设置步骤 ID 供后续引用
+        uses: actions/deploy-pages@v4 # 使用官方部署动作
