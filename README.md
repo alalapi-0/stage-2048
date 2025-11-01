@@ -76,19 +76,27 @@ if (manager.checkPass()) {
 - 动画状态与绘制逻辑经过优化，不会重复触发 requestAnimationFrame，确保低端设备也能保持流畅。
 - 小程序端沿用轻量绘制策略，仅在设置开启动画时为新格子应用一次性透明度过渡。
 
+## 质量与可访问性
+- Web 页面结构调整为语义化的 `<header>/<main>/<section>`，同时在按钮、HUD 与状态区补充 `aria-label`、`aria-live`。
+- 新增高对比度模式开关与 `/web/a11y.css`，焦点高亮与暗背景/亮文字组合使视力受限用户更易辨识。
+- `#status` 区域通过 `role="status"` 播报导入、导出、重置等操作，屏幕阅读器会自动朗读变化。
+- 绘制层加入 `requestAnimationFrame` 合帧节流，快速滑动或长按方向键时也只在下一帧集中绘制一次。
+- 增补 `tests/smoke-core.mjs` 与 `tests/simulate-2048-runs.mjs`，可在纯 Node 环境验证核心 API 与随机局表现。
+
 ## 成就系统
 - 游戏会记录历史最大方块值（Web：`stage2048.maxTile.v1`，小程序：`stage2048.mp.maxTile.v1`），跨会话保留。
 - 达到 64、256、1024 三个阈值分别授予 🗝️、🎯、🏆 徽章，并在 HUD 显示以及朗读提示中同步。
 - 撤销或复盘不会降低已解锁的徽章，确保成就持久化。
 
 ## 本地验证 / 冒烟测试
-使用以下命令运行 Node 版冒烟脚本，快速确认核心逻辑与关卡推进是否生效：
+- 使用以下命令运行无依赖脚本，快速确认核心逻辑、关卡推进与随机局表现：
 
 ```bash
-node ./web/dev-smoke-test.mjs
+node ./tests/smoke-core.mjs
+node ./tests/simulate-2048-runs.mjs
 ```
 
-脚本会在控制台打印关卡通关、步数与分数信息，结束时使用 `console.table` 输出棋盘快照，便于目视检查状态是否合理。
+- 若需额外观察绘制与输入处理，可继续运行 `node ./web/dev-smoke-test.mjs`，检查控制台输出的关卡通关信息。
 
 ## 可配置字段
 | 字段 | 位置 | 类型/示例 | 默认 | 说明 |
@@ -106,6 +114,11 @@ node ./web/dev-smoke-test.mjs
 - 禁止任何二进制文件入库，包括图片、压缩包、构建产物等。
 - 建议提交信息前缀使用 `core: ...`、`web: ...`、`mini: ...`、`docs: ...` 等模块化标签。
 - 每次改动后需要在 `README.diff.md` 中记录差异（模板见文件）。
+
+## 发布与分发
+- Web 版本可直接托管 `/web/` 目录，或在 GitHub Pages 中指定 `main` 分支的 `/web` 子目录。
+- 小程序上线前需在 `project.config.json` 填写自己的 `appid`，并使用开发者工具完成真机预览、提审与发布。
+- 发布动作前请阅读 `/docs/RELEASE_GUIDE.md`，同步版本号、更新 `README.diff.md`，并在 Releases 中复用摘要说明。
 
 ## FAQ（占位）
 - **字体度量在不同环境可能不同，如何处理？** 通过二分法与近似比例调整字号，以保证跨平台一致性。

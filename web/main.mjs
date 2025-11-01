@@ -52,6 +52,8 @@ const COLORS = {
   2048: { bg: '#3c3a32', fg: '#f9f6f2' }
 };
 
+const ANIMATE = false;                                 // 全局动画开关，默认关闭以兼顾性能
+
 // 读取页面元素引用
 const canvas = document.getElementById('game');        // 画布节点
 const ctx = canvas.getContext('2d');                   // 2D 绘图上下文
@@ -68,6 +70,7 @@ const btnClearBest = document.getElementById('btn-clear-best');         // 清�
 const btnUndo = document.getElementById('btn-undo');   // 撤销一步按钮
 const btnExport = document.getElementById('btn-export');                // 导出按钮
 const inputImport = document.getElementById('input-import');            // 导入文件输入
+const inputHighContrast = document.getElementById('hc');                // 高对比度模式复选框
 const inputDemo = document.getElementById('demo');     // 演示模式开关
 const form = document.getElementById('settings-form');                 // 设置表单
 const inputCanvasSize = document.getElementById('input-canvas-size');  // 画布尺寸输入框
@@ -100,6 +103,7 @@ let replayIndex = 0;                                  // 复盘已执行步数
 let replayRaf = 0;                                    // 复盘调度句柄
 let replayLastTick = 0;                               // 复盘上一次执行时间戳
 let maxTileHistory = 0;                               // 历史最大方块值（用于成就）
+let drawQueued = false;                               // 是否已有绘制请求排队
 
 const ANIMATION_DURATION = 160;                       // 单次淡入动画的持续时间（毫秒）
 const DEMO_INTERVAL = 160;                            // 演示模式每步尝试间隔（毫秒）
@@ -246,6 +250,7 @@ function announce(message) {
   if (!elStatus) return;                               // 若无状态区域则直接返回
   const text = message || '';                          // 将 undefined/null 归一为空串
   elStatus.textContent = text;                         // 更新可读文本，供屏幕阅读器朗读
+  elStatus.setAttribute('aria-label', text);           // 同步 aria-label 以便重复播报
 }
 
 // 读取历史最大方块记录，兼容异常情况
@@ -325,7 +330,7 @@ function animationStep(timestamp) {
 // 启动淡入动画：cells 为需要淡入的单元格集合
 function startAnimationForCells(cells) {
   cancelAnimation();                                   // 先取消可能存在的旧动画
-  if (!SETTINGS.animate || !cells || cells.size === 0) { // 未启用或无动画单元格
+  if (!ANIMATE || !SETTINGS.animate || !cells || cells.size === 0) { // 未启用或无动画单元格
     drawAll();                                         // 直接重绘静态画面
     return;                                            // 结束流程
   }
@@ -486,6 +491,8 @@ function updateBestScore(curScore) {
     persistBest();
   }
   elBest.textContent = `最佳 ${bestScore}`;
+  elBest.setAttribute('aria-label', `最佳分 ${bestScore}`); // 初始化时同步最佳分朗读
+  elBest.setAttribute('aria-label', `最佳分 ${bestScore}`); // 同步最佳分的朗读内容
 }
 
 // ===== 初始化流程 =====
@@ -554,7 +561,7 @@ function init() {
 
   // 步骤 8：根据设置计算画布尺寸并绘制
   resizeCanvas();
-  drawAll();
+  queueDraw();
   syncHud();
 
   // 步骤 9：存储一次清洗后的设置（确保格式统一）
@@ -563,6 +570,9 @@ function init() {
   // 步骤 10：加载成就记录
   loadMaxTileFromStorage();
   updateAchievementDisplay(getGridMaxValue(game.getGrid()));
+  if (inputHighContrast) {                              // 初始化高对比度开关状态
+    inputHighContrast.checked = document.body.classList.contains('high-contrast'); // 同步复选框与当前类名
+  }
 }
 
 // ===== 绘制与 HUD =====
@@ -606,7 +616,19 @@ function fitFont(text, maxW, maxH, family = 'system-ui, Segoe UI, Roboto, Helvet
   return { size: best, css: `${weight} ${best}px ${family}` };
 }
 
+// 合帧调度函数：使用 rAF 合并多次绘制请求
+function queueDraw() {
+  if (animationState) return;                          // 若动画进行中则由动画循环负责绘制
+  if (drawQueued) return;                              // 已有请求排队时不再重复申请
+  drawQueued = true;                                   // 标记绘制请求已排队
+  requestAnimationFrame((timestamp) => {               // 等待下一帧再统一绘制
+    drawQueued = false;                                // 恢复可用状态
+    drawAll(timestamp);                                // 调用实际绘制逻辑
+  });
+}
+
 function drawAll(timestamp) {
+  drawQueued = false;                                  // 调用绘制时重置节流标记
   ctx.clearRect(0, 0, canvasCssSize, canvasCssSize);  // 擦除整块画布
   const size = game.size;                             // 读取当前棋盘尺寸
   const now = typeof timestamp === 'number' ? timestamp : performance.now(); // 取本帧时间戳
@@ -659,7 +681,10 @@ function drawAll(timestamp) {
   const cur = game.getScore();
   updateBestScore(cur);
   elScore.textContent = `得分 ${cur}`;
-  elTotal.textContent = `总分 ${LM.getTotalScore()}`;
+  elScore.setAttribute('aria-label', `得分 ${cur}`);   // 同步 aria-label 便于朗读
+  const totalScore = LM.getTotalScore();               // 读取累计总分避免重复调用
+  elTotal.textContent = `总分 ${totalScore}`;
+  elTotal.setAttribute('aria-label', `总分 ${totalScore}`); // 同步总分提示
   updateAchievementDisplay(getGridMaxValue(grid));     // 同步成就徽章
 }
 
@@ -668,7 +693,9 @@ function syncHud() {
   const lv = LM.getLevel();
   const target = LM.getTarget();
   elLevel.textContent = `关卡 ${lv}（${size}×${size}）`;
+  elLevel.setAttribute('aria-label', `当前关卡 ${lv}，棋盘 ${size} 乘 ${size}`); // 为关卡文本添加朗读提示
   elTarget.textContent = `目标 ${target}`;
+  elTarget.setAttribute('aria-label', `当前目标 ${target}`); // 为目标文本添加朗读提示
 }
 
 // ===== 游戏逻辑操作 =====
@@ -680,7 +707,7 @@ function restartLevel() {
   ops = [];                                           // 清空操作序列
   undoSnapshot = null;                                // 清空撤销记录
   cancelAnimation();                                  // 确保无残余动画
-  drawAll();                                          // 重新绘制棋盘
+  queueDraw();                                        // 重新绘制棋盘
   syncHud();                                          // 同步 HUD 文本
   announce('已重开本关');                             // 播报提示
 }
@@ -694,7 +721,7 @@ function enterNextLevel() {
   ops = [];                                           // 新关卡重置操作序列
   undoSnapshot = null;                                // 清空撤销记录
   cancelAnimation();                                  // 取消可能存在的动画
-  drawAll();                                          // 绘制新关卡
+  queueDraw();                                        // 绘制新关卡
   syncHud();                                          // 更新 HUD
   announce('已进入下一关');                           // 播报提示
 }
@@ -705,7 +732,7 @@ function doMove(dir, options = {}) {
   const trackUndo = options.trackUndo !== false;       // 是否记录撤销快照
   const logMove = options.log !== false;               // 是否记录操作序列
   const allowAnimation = options.animate !== false;    // 是否允许淡入动画
-  const prevGrid = SETTINGS.animate && allowAnimation ? game.getGrid() : null; // 仅在需要动画时复制棋盘
+  const prevGrid = ANIMATE && SETTINGS.animate && allowAnimation ? game.getGrid() : null; // 仅在需要动画时复制棋盘
   const snapshot = trackUndo ? LM.snapshot() : null;   // 在移动前抓取关卡快照
   const prevOpsLength = ops.length;                    // 记录移动前的操作序列长度
   const moved = game.move(dir);                        // 执行核心移动
@@ -717,12 +744,12 @@ function doMove(dir, options = {}) {
     ops.push(DIR_TO_LETTER[dir]);
   }
   persistProgress();                                   // 持久化最新状态
-  if (SETTINGS.animate && allowAnimation && prevGrid) {
+  if (ANIMATE && SETTINGS.animate && allowAnimation && prevGrid) {
     const cells = computeAnimatedCells(prevGrid, game.getGrid()); // 计算需要淡入的单元格
     startAnimationForCells(cells);                     // 启动动画
   } else {
     cancelAnimation();                                 // 禁用动画时直接重绘
-    drawAll();
+    queueDraw();
   }
   syncHud();                                           // 同步 HUD 文本
 
@@ -779,7 +806,7 @@ function handleUndo() {
     undoSnapshot = null;                               // 清空撤销快照
     persistProgress();                                 // 写入最新进度
     cancelAnimation();                                 // 取消动画并重绘
-    drawAll();
+    queueDraw();
     syncHud();
     announce('已撤销一步');                             // 播报成功
   } catch (err) {
@@ -907,7 +934,7 @@ function startReplay(seed, sequence) {
   resizeCanvas();                                      // 根据设置更新画布
   ops = [];                                            // 清空操作序列
   cancelAnimation();                                   // 取消动画并绘制初始状态
-  drawAll();
+  queueDraw();
   syncHud();
   announce(`开始复盘，共 ${sequence.length} 步`);      // 播报复盘信息
   replayRaf = requestAnimationFrame(runReplayFrame);   // 启动复盘循环
@@ -935,7 +962,7 @@ function handleSettingsChange() {
   ops = [];
   undoSnapshot = null;
   cancelAnimation();
-  drawAll();
+  queueDraw();
   syncHud();
 }
 
@@ -955,7 +982,7 @@ function handleResetProgress() {
   ops = [];
   undoSnapshot = null;
   cancelAnimation();
-  drawAll();
+  queueDraw();
   syncHud();
   window.alert('进度已重置，当前关卡回到设置指定的起始尺寸。');
   announce('进度已重置');
@@ -965,7 +992,7 @@ function handleClearBest() {
   bestScore = 0;
   persistBest();
   cancelAnimation();
-  drawAll();
+  queueDraw();
   window.alert('最佳分已清空。');
   announce('最佳分已清空');
 }
@@ -988,6 +1015,7 @@ function handleExport() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+  announce('导出文件已生成，可在浏览器下载列表查看'); // 播报导出结果
 }
 
 function handleImportFile(file) {
@@ -1000,6 +1028,7 @@ function handleImportFile(file) {
     } catch (err) {
       console.error('[Stage2048] 导入失败：', err);
       window.alert('导入失败，请检查文件格式。');
+      announce('导入失败，请查看控制台以了解详情');      // 播报导入失败提示
     } finally {
       inputImport.value = '';
     }
@@ -1008,6 +1037,7 @@ function handleImportFile(file) {
     console.error('[Stage2048] 文件读取失败：', reader.error);
     window.alert('文件读取失败，请重试。');
     inputImport.value = '';
+    announce('文件读取失败，请重新选择 JSON 文件');     // 播报文件读取失败
   };
   reader.readAsText(file, 'utf-8');
 }
@@ -1065,7 +1095,7 @@ function applyImportedState(data) {
   persistProgress();                                    // 保存最新进度
   resizeCanvas();                                       // 重算画布
   cancelAnimation();                                    // 确保无动画遗留
-  drawAll();                                            // 绘制棋盘
+  queueDraw();                                          // 绘制棋盘
   syncHud();                                            // 更新 HUD
   suppressSettingsNotice = false;                       // 恢复提示开关
   announce('设置与进度已导入');                         // 播报完成
@@ -1076,6 +1106,7 @@ function applyImportedState(data) {
 function bindEvents() {
   document.addEventListener('keydown', (e) => {
     if (isReplaying) return;                            // 复盘期间忽略用户输入
+    // 提示：Enter/Space 会交由浏览器触发按钮点击，保持默认行为即可支持键盘操作
     if (e.key === 'ArrowLeft')  { e.preventDefault(); doMove('left'); }
     if (e.key === 'ArrowRight') { e.preventDefault(); doMove('right'); }
     if (e.key === 'ArrowUp')    { e.preventDefault(); doMove('up'); }
@@ -1114,8 +1145,15 @@ function bindEvents() {
     if (e.target.checked) startDemo();                 // 勾选即开启演示
     else stopDemo('演示模式已关闭');                   // 取消勾选则关闭演示
   });
+  if (inputHighContrast) {                              // 绑定高对比度切换
+    inputHighContrast.addEventListener('change', (e) => { // 监听高对比度复选框
+      const enabled = Boolean(e.target.checked);        // 读取勾选状态
+      document.body.classList.toggle('high-contrast', enabled); // 根据状态切换类名
+      announce(enabled ? '高对比度模式已开启' : '高对比度模式已关闭'); // 播报切换结果
+    });
+  }
   form.addEventListener('change', () => { handleSettingsChange(); });
-  window.addEventListener('resize', () => { resizeCanvas(); drawAll(); });
+  window.addEventListener('resize', () => { resizeCanvas(); queueDraw(); });
 }
 
 // ===== 启动入口 =====
