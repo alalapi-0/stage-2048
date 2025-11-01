@@ -1,46 +1,62 @@
-<!DOCTYPE html><!-- 声明文档类型为 HTML5，确保浏览器以标准模式渲染 -->
-<html lang="zh-CN"><!-- 设置页面语言为简体中文，方便屏幕阅读器识别 -->
-<head><!-- 页面头部信息开始 -->
-  <meta charset="UTF-8" /><!-- 指定字符编码为 UTF-8，避免中文乱码 -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" /><!-- 设定视口，确保在移动端正常显示 -->
-  <title>Stage2048（占位）</title><!-- 设置浏览器标签栏标题 -->
-  <style><!-- 内联样式块开始，用于快速定义占位页面样式 -->
-    body { /* 设置页面基础样式 */
-      margin: 0; /* 移除默认外边距，方便居中布局 */
-      font-family: "Helvetica Neue", Arial, sans-serif; /* 指定字体族，保证占位文字清晰 */
-      background-color: #f5f5f5; /* 设置柔和的浅灰背景 */
-      display: flex; /* 使用弹性布局实现垂直水平居中 */
-      align-items: center; /* 垂直居中页面内容 */
-      justify-content: center; /* 水平居中页面内容 */
-      min-height: 100vh; /* 让容器填满视口高度 */
-    }
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <!-- 视口设置，保证移动端按设备宽度渲染 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stage2048 - Web</title>
+  <style>
+    /* 页面与字体的基础样式 */
+    html, body { height: 100%; margin: 0; background: #faf8ef; font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial; }
+    /* 居中容器，垂直方向排列 */
+    .wrap { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; box-sizing: border-box; }
+    /* 画布外围提示颜色与圆角由脚本绘制，这里只做占位 */
+    #game { background: #bbada0; border-radius: 10px; touch-action: none; }
+    /* 信息与按钮区域的行布局 */
+    .row { display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap; }
+    /* 简单按钮样式 */
+    button { padding: 6px 12px; border: 1px solid #bbb; border-radius: 6px; background: #fff; cursor: pointer; }
+    /* 文本颜色与字号 */
+    .meta, .score { color: #776e65; }
+  </style>
+  <script>
+    // 可选：通过全局对象覆盖参数，便于无改代码调试
+    // window.CANVAS_2048_CONFIG = {
+    //   CANVAS_CSS_SIZE: 420,
+    //   GAP: 10,
+    //   LEVELS: { startSize: 2, carryScore: true, randomTileWeightsBySize: { 4: { 2: 0.9, 4: 0.1 } } }
+    // };
+  </script>
+</head>
+<body>
+  <!-- 外层自适应容器 -->
+  <div class="wrap">
+    <!-- 主标题 -->
+    <div class="row">
+      <div class="meta" style="font-size: 20px; font-weight: 700;">Stage2048（关卡 2048）</div>
+    </div>
 
-    .container { /* 定义包裹内容的容器 */
-      text-align: center; /* 让内部文字居中显示 */
-      color: #333; /* 设置文字颜色为深灰以增强可读性 */
-    }
+    <!-- 画布主体，宽高由脚本按 DPR 设置，这里先给出 CSS 尺寸 -->
+    <canvas id="game" width="480" height="480"></canvas>
 
-    #game { /* 定义 Canvas 占位样式 */
-      width: 320px; /* 固定宽度作为初始展示区域 */
-      height: 320px; /* 固定高度与宽度一致，保持正方形 */
-      background-color: #ddd; /* 采用浅灰色背景突出画布区域 */
-      border-radius: 12px; /* 使用圆角模拟未来棋盘样式 */
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); /* 添加阴影营造浮起效果 */
-      display: block; /* 设置为块级元素方便上下排列文字 */
-      margin: 0 auto 24px; /* 让画布居中并与文字保持间距 */
-    }
+    <!-- 信息栏：关卡、目标、分数、总分、最佳分 -->
+    <div class="row">
+      <span id="level" class="meta">关卡 1（2×2）</span>
+      <span id="target" class="meta">目标 32</span>
+    </div>
+    <div class="row">
+      <span id="score" class="score">得分 0</span>
+      <span id="total" class="score">总分 0</span>
+      <span id="best" class="score">最佳 0</span>
+    </div>
 
-    .hint { /* 定义提示文字样式 */
-      margin: 8px 0; /* 设置上下间距让文字更易读 */
-      font-size: 16px; /* 使用适中的字号 */
-    }
-  </style><!-- 内联样式块结束 -->
-</head><!-- 页面头部信息结束 -->
-<body><!-- 页面主体开始 -->
-  <div class="container"><!-- 包裹画布与提示文字的容器 -->
-    <canvas id="game" width="320" height="320"></canvas><!-- 定义后续使用的 Canvas，占位阶段仅展示灰色背景 -->
-    <p class="hint">第 3 轮将注入渲染逻辑，敬请期待。</p><!-- 提示第 3 轮会加入真正的渲染实现 -->
-    <p class="hint">请按 README 指引进行下一轮开发步骤。</p><!-- 引导贡献者阅读文档继续推进 -->
-  </div><!-- 容器结束 -->
-</body><!-- 页面主体结束 -->
-</html><!-- HTML 文档结束 -->
+    <!-- 操作区：重开本关 -->
+    <div class="row">
+      <button id="btn-new">重开本关</button>
+    </div>
+  </div>
+
+  <!-- 业务脚本使用 ESModule 形式，引入渲染与交互逻辑 -->
+  <script type="module" src="./main.mjs"></script>
+</body>
+</html>
