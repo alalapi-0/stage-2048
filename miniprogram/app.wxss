@@ -1,0 +1,6 @@
+/* 设置全局页面背景色与字体，保持与 Web 占位页一致。 */
+page { /* 小程序页面选择器，影响所有页面。 */
+  background-color: #f5f5f5; /* 定义浅灰背景。 */
+  font-family: "Helvetica Neue", Arial, sans-serif; /* 使用与 Web 相同的字体族。 */
+  color: #333; /* 设置默认文字颜色。 */
+} /* 结束全局样式定义。 */

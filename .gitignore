@@ -1,0 +1,20 @@
+node_modules/ # 忽略 node_modules 目录，避免提交依赖安装产物。
+dist/ # 忽略 dist 目录，避免提交打包结果。
+build/ # 忽略 build 目录，避免提交构建中间产物。
+.DS_Store # 忽略 macOS 系统生成的 .DS_Store 文件。
+Thumbs.db # 忽略 Windows 缩略图缓存文件 Thumbs.db。
+*.zip # 忽略压缩包文件以防二进制入库。
+*.tar # 忽略 tar 打包文件以防二进制入库。
+*.tgz # 忽略 tgz 压缩包文件以防二进制入库。
+*.png # 忽略 PNG 图片以防二进制资源误入库。
+*.jpg # 忽略 JPG 图片以防二进制资源误入库。
+*.jpeg # 忽略 JPEG 图片以防二进制资源误入库。
+*.gif # 忽略 GIF 图片以防二进制资源误入库。
+*.webp # 忽略 WebP 图片以防二进制资源误入库。
+*.mp4 # 忽略 MP4 视频以防二进制资源误入库。
+*.wav # 忽略 WAV 音频以防二进制资源误入库。
+.vscode/ # 忽略 VSCode 项目配置目录。
+.idea/ # 忽略 JetBrains IDEA 项目配置目录。
+/web/.cache/ # 忽略 Web 项目的缓存目录。
+/miniprogram/.dist/ # 忽略小程序构建目录。
+/docs/screenshots/ # 忽略文档截图目录以防大文件。

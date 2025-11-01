@@ -1,0 +1,28 @@
+/* 定义页面根容器的布局样式，实现垂直水平居中。 */
+.container { /* 外层容器选择器。 */
+  min-height: 100vh; /* 让容器高度充满视口，便于居中。 */
+  display: flex; /* 使用弹性布局。 */
+  flex-direction: column; /* 子元素纵向排列。 */
+  align-items: center; /* 水平居中子元素。 */
+  justify-content: center; /* 垂直居中子元素。 */
+  padding: 24rpx; /* 添加内边距防止元素贴边。 */
+  box-sizing: border-box; /* 确保内边距不会撑大容器。 */
+} /* 外层容器样式结束。 */
+
+/* 定义 Canvas 的基础尺寸与风格。 */
+.board { /* Canvas 占位样式。 */
+  width: 320px; /* 与 Web 端保持一致的宽度。 */
+  height: 320px; /* 保持正方形比例。 */
+  background-color: #dddddd; /* 使用浅灰色突出画布区域。 */
+  border-radius: 24rpx; /* 使用圆角增加亲和感。 */
+  box-shadow: 0 16rpx 48rpx rgba(0, 0, 0, 0.1); /* 添加阴影模拟浮起效果。 */
+  margin-bottom: 24rpx; /* 与下方提示文字保持间距。 */
+} /* Canvas 样式结束。 */
+
+/* 定义提示文字样式。 */
+.hint { /* 提示文字选择器。 */
+  font-size: 32rpx; /* 设置适中的字号。 */
+  color: #555555; /* 使用偏深的灰色提高可读性。 */
+  text-align: center; /* 文字居中对齐。 */
+  margin: 8rpx 0; /* 上下间距保持视觉舒适。 */
+} /* 提示文字样式结束。 */
