@@ -3,10 +3,11 @@
 // 特点：棋盘从数值 1 起步，新方块默认采用 {1:0.9, 2:0.1} 权重，相同数字合并后数值翻倍，并在移动发生变化时自动生成新方块。
 
 class Game2048 {
-  // 构造函数：接收棋盘尺寸与新方块权重分布，可选参数提供默认值
-  constructor({ size = 4, randomTileWeights = { 1: 0.9, 2: 0.1 } } = {}) {
+  // 构造函数：接收棋盘尺寸、权重与伪随机数生成器，保持与 ES 版本一致的默认值
+  constructor({ size = 4, randomTileWeights = { 1: 0.9, 2: 0.1 }, rng } = {}) {
     this.size = size;                               // 保存棋盘边长
     this.randomTileWeights = randomTileWeights;     // 保存随机生成新方块的权重映射
+    this._rng = typeof rng === 'function' ? rng : Math.random; // 记录伪随机数生成器，默认使用 Math.random
     this.score = 0;                                  // 初始化当前得分
     this.grid = this._createEmpty();                 // 创建空棋盘
     this.addRandomTile();                            // 开局放置第一个随机方块
@@ -58,7 +59,7 @@ class Game2048 {
     }
     if (empty.length === 0) return false;             // 如果没有空位则失败
 
-    const [rr, cc] = empty[Math.floor(Math.random() * empty.length)]; // 随机挑选一个空位
+    const [rr, cc] = empty[Math.floor(this._rng() * empty.length)];   // 通过伪随机数生成器挑选空位
     const val = this._weightedRandom(this.randomTileWeights);         // 根据权重抽取数值
     this.grid[rr][cc] = val;                                          // 写入棋盘
     return true;                                                      // 返回成功标记
@@ -115,7 +116,7 @@ class Game2048 {
   _weightedRandom(weights) {
     const items = Object.keys(weights).map(k => ({ v: Number(k), w: Number(weights[k]) })); // 将权重映射转换为数组
     const sum = items.reduce((s, it) => s + it.w, 0); // 计算权重总和
-    let rnd = Math.random() * sum;                   // 生成 0 到总权重之间的随机数
+    let rnd = this._rng() * sum;                     // 使用伪随机数生成器生成随机数
     for (const it of items) {                        // 遍历每一项
       rnd -= it.w;                                   // 减去当前项的权重
       if (rnd <= 0) return it.v;                     // 当随机数不大于 0 时返回对应的值
@@ -140,6 +141,33 @@ class Game2048 {
     }
     while (out.length < this.size) out.push(0);    // 不足长度时补零
     return reverse ? out.reverse() : out;          // 如果之前反转过则再次反转以还原方向
+  }
+
+  // 观察当前状态：返回棋盘副本与得分，用于撤销或复盘（非正式调试 API）
+  peekState() {
+    return {
+      grid: this.grid.map(row => row.slice()),       // 为每一行创建副本，避免外部修改内部数据
+      score: this.score                              // 返回当前得分
+    };
+  }
+
+  // 从快照恢复状态：仅在受信任环境中调用（非正式调试 API）
+  restoreState(state) {
+    if (!state || typeof state !== 'object') return; // 若输入非法则直接忽略
+    const gridSrc = Array.isArray(state.grid) ? state.grid : []; // 读取快照中的棋盘数组
+    const newGrid = [];                               // 准备新的棋盘结构
+    for (let r = 0; r < this.size; r++) {             // 遍历行索引
+      const rowSrc = Array.isArray(gridSrc[r]) ? gridSrc[r] : []; // 获取对应行数据
+      const row = [];                                  // 构建当前行
+      for (let c = 0; c < this.size; c++) {            // 遍历列索引
+        const val = Number(rowSrc[c]);                 // 尝试转换为数字
+        row.push(Number.isFinite(val) ? val : 0);      // 非数字值回退为 0
+      }
+      newGrid.push(row);                               // 将行追加到新棋盘
+    }
+    this.grid = newGrid;                               // 覆盖内部棋盘
+    const scoreNum = Number(state.score);              // 解析快照得分
+    if (Number.isFinite(scoreNum)) this.score = scoreNum; // 合法得分写回当前实例
   }
 }
 

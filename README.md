@@ -58,8 +58,28 @@ if (manager.checkPass()) {
 ## 参数化与持久化
 - 核心层新增 `TARGET_FN_REGISTRY` 与 `LevelManager.toJSON()/fromJSON()`，用于序列化关卡尺寸、累计分以及棋盘状态。
 - `/core/config.schema.md` 与 `/docs/CONFIG_GUIDE.md` 详细列出可配置字段及其载入优先级，默认配置在 Web 与小程序端自动加载。
-- **Web 端**：使用 `localStorage` 存储设置（`stage2048.settings.v1`）、进度（`stage2048.progress.v1`）与最佳分（`stage2048.bestScore.v1`），支持 URL Query 覆盖以及导入/导出 JSON。
-- **小程序端**：使用 `wx.setStorageSync`/`wx.getStorageSync` 存储设置（`stage2048.mp.settings.v1`）、进度（`stage2048.mp.progress.v1`）与最佳分（`stage2048.mp.bestScore.v1`），并提供“重置进度”“清空最佳分”按钮。
+- **Web 端**：使用 `localStorage` 存储设置（`stage2048.settings.v2`）、进度（`stage2048.progress.v2`）与最佳分（`stage2048.bestScore.v1`），支持 URL Query 覆盖以及导入/导出 JSON。
+- **小程序端**：使用 `wx.setStorageSync`/`wx.getStorageSync` 存储设置（`stage2048.mp.settings.v2`）、进度（`stage2048.mp.progress.v2`）与最佳分（`stage2048.mp.bestScore.v1`），并提供“重置进度”“清空最佳分”按钮。
+
+## 撤销与复盘
+- 核心 `Game2048` 支持 `peekState()` 与 `restoreState()`，`LevelManager` 增强为可生成 `snapshot()` 并通过 `restore()` 恢复，用于撤销与复盘脚本。
+- Web 端提供「撤销一步」按钮，每次有效移动都会记录快照，可立即回到上一步；导出 JSON 时会附带 `{ seed, ops }` 便于重放。
+- 小程序端同样支持撤销，在演示或复盘过程中会自动禁用，导入复盘脚本可通过剪贴板 JSON 完成，存储键升级为 `*.v2` 并向下兼容旧版数据。
+
+## 演示模式
+- Web 与小程序均新增演示模式开关，启用后会按照「左→上→右→下」的启发式尝试移动，帮助玩家观察策略。
+- 演示会在无可用步、玩家手动关闭或棋局结束时自动停止，同时通过状态播报提示。
+- 复盘过程中自动禁用演示，避免两种自动流程互相冲突。
+
+## 动画与性能
+- 新增淡入动画开关，默认关闭；开启后新生与合并方块会在约 160ms 内完成透明度渐变。
+- 动画状态与绘制逻辑经过优化，不会重复触发 requestAnimationFrame，确保低端设备也能保持流畅。
+- 小程序端沿用轻量绘制策略，仅在设置开启动画时为新格子应用一次性透明度过渡。
+
+## 成就系统
+- 游戏会记录历史最大方块值（Web：`stage2048.maxTile.v1`，小程序：`stage2048.mp.maxTile.v1`），跨会话保留。
+- 达到 64、256、1024 三个阈值分别授予 🗝️、🎯、🏆 徽章，并在 HUD 显示以及朗读提示中同步。
+- 撤销或复盘不会降低已解锁的徽章，确保成就持久化。
 
 ## 本地验证 / 冒烟测试
 使用以下命令运行 Node 版冒烟脚本，快速确认核心逻辑与关卡推进是否生效：

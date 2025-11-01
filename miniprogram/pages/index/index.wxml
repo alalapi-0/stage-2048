@@ -1,5 +1,5 @@
 <!-- /miniprogram/pages/index/index.wxml -->
-<!-- 说明：小程序首页，包含画布、信息栏以及操作按钮，新增重置进度与清空最佳分功能。 -->
+<!-- 说明：小程序首页，包含画布、信息栏与操作控件，本轮新增撤销、演示、复盘与成就展示等功能。 -->
 
 <view class="wrap">
   <!-- 标题 -->
@@ -26,15 +26,33 @@
 
   <!-- 信息栏：得分/总分/最佳 -->
   <view class="row">
-    <text class="score">得分 {{score}}</text>
-    <text class="score">总分 {{totalScore}}</text>
-    <text class="score">最佳 {{bestScore}}</text>
+    <text class="score" aria-role="text" aria-label="当前得分 {{score}}">得分 {{score}}</text>
+    <text class="score" aria-role="text" aria-label="累计总分 {{totalScore}}">总分 {{totalScore}}</text>
+    <text class="score" aria-role="text" aria-label="最佳成绩 {{bestScore}}">最佳 {{bestScore}}</text>
   </view>
 
-  <!-- 操作区：重开本关 / 重置进度 / 清空最佳分 -->
+  <!-- 成就徽章展示 -->
   <view class="row">
-    <button class="btn" bindtap="onRestart">重开本关</button>
-    <button class="btn" bindtap="onResetProgress">重置进度</button>
-    <button class="btn" bindtap="onClearBest">清空最佳分</button>
+    <text class="meta" aria-role="note" aria-label="成就徽章 {{achvLabel}}">{{achv}}</text>
   </view>
+
+  <!-- 操作区：重开 / 撤销 / 重置 / 清空 -->
+  <view class="row">
+    <button class="btn" bindtap="onRestart" aria-label="重开本关">重开本关</button>
+    <button class="btn" bindtap="onUndo" aria-label="撤销一步">撤销一步</button>
+    <button class="btn" bindtap="onResetProgress" aria-label="重置进度">重置进度</button>
+    <button class="btn" bindtap="onClearBest" aria-label="清空最佳分">清空最佳分</button>
+  </view>
+
+  <!-- 操作区：演示模式 / 重放复盘 -->
+  <view class="row">
+    <view class="demo-item" aria-role="switch" aria-label="演示模式">
+      <switch class="demo-switch" checked="{{demo}}" bindchange="onDemoToggle" aria-label="切换演示模式" />
+      <text class="meta">演示模式</text>
+    </view>
+    <button class="btn" bindtap="onReplay" aria-label="重放复盘">重放复盘</button>
+  </view>
+
+  <!-- 状态播报区域，使用 aria-role="status" 供朗读 -->
+  <view class="sr-only" aria-role="status" aria-live="polite">{{statusText}}</view>
 </view>

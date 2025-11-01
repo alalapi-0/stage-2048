@@ -59,13 +59,15 @@ export const TARGET_FN_REGISTRY = {
 };
 
 export class LevelManager {
-  // 构造函数：支持配置起始尺寸、累计策略、目标函数与按尺寸定制的新方块权重
+  // 构造函数：支持配置起始尺寸、累计策略、目标函数、新方块权重与可选的固定种子
   constructor({
     startSize = 2,                                     // 默认从 2×2 棋盘开始
     carryScore = true,                                 // 默认累计跨关卡分数
     targetFn = DEFAULT_TARGET_FN,                      // 默认目标函数为 power 版本
     targetFnKey = 'power',                             // 默认目标函数标识
-    randomTileWeightsBySize = {}                       // 可选：按尺寸覆写新方块权重
+    randomTileWeightsBySize = {},                      // 可选：按尺寸覆写新方块权重
+    rngSeed = '',                                      // 可选：固定伪随机数种子
+    rngFactory = null                                  // 可选：根据种子生成伪随机函数的工厂
   } = {}) {
     const sizeNum = Number(startSize);                 // 将传入的起始尺寸转换为数字
     this.size = Number.isInteger(sizeNum) && sizeNum > 1 ? sizeNum : 2; // 非法输入回退为 2
@@ -74,6 +76,9 @@ export class LevelManager {
     this.targetFnKey = typeof targetFnKey === 'string' ? targetFnKey : 'power';    // 存储目标函数标识
     this.randomTileWeightsBySize = cloneWeightMap(randomTileWeightsBySize);       // 克隆尺寸→权重映射
     this.totalScoreBeforeThisLevel = 0;                // 初始化累计分为 0
+    this.rngFactory = typeof rngFactory === 'function' ? rngFactory : null; // 记录伪随机工厂，非法值置空
+    this.rngSeed = rngSeed === null || rngSeed === undefined || rngSeed === '' ? '' : String(rngSeed); // 规范化存储种子字符串
+    this._rng = this._createRngFromSeed();             // 基于种子生成伪随机函数，未配置时为 null
     this._createGame();                                // 创建首个 Game2048 实例
   }
 
@@ -81,7 +86,29 @@ export class LevelManager {
   _createGame() {
     const customWeights = cloneSingleWeights(this.randomTileWeightsBySize[this.size]); // 读取并克隆对应尺寸的权重
     const weights = Object.keys(customWeights).length ? customWeights : getDefaultWeights(); // 若无定制则使用默认权重
-    this.game = new Game2048({ size: this.size, randomTileWeights: weights });              // 基于尺寸与权重生成游戏实例
+    const rng = typeof this._rng === 'function' ? this._rng : null; // 获取伪随机函数引用，未设置时返回 null
+    this.game = new Game2048({ size: this.size, randomTileWeights: weights, rng: rng || undefined }); // 基于尺寸、权重与伪随机函数生成实例
+  }
+
+  // 内部工具：根据当前种子与工厂创建伪随机函数
+  _createRngFromSeed() {
+    if (!this.rngFactory) return null;                 // 未提供工厂则不生成伪随机函数
+    if (this.rngSeed === '') return null;              // 种子为空字符串时视为不启用
+    try {
+      const rng = this.rngFactory(this.rngSeed);       // 调用工厂基于种子生成伪随机函数
+      return typeof rng === 'function' ? rng : null;   // 若返回值为函数则使用，否则视为未启用
+    } catch (err) {
+      console.warn('[LevelManager] rngFactory 执行失败，已回退为非确定模式：', err); // 捕获异常并给出警告
+      return null;                                     // 出错时禁用伪随机函数
+    }
+  }
+
+  // 内部工具：尝试恢复伪随机函数的内部状态
+  _applyRngState(stateValue) {
+    if (!this._rng || typeof this._rng.restoreState !== 'function') return; // 无法恢复时直接返回
+    const num = Number(stateValue);                  // 将传入值转换为数字
+    if (!Number.isFinite(num)) return;               // 非数字直接忽略
+    this._rng.restoreState(num);                     // 调用工厂提供的恢复能力
   }
 
   // 获取当前关卡的 Game2048 实例
@@ -139,7 +166,9 @@ export class LevelManager {
         randomTileWeights: cloneSingleWeights(this.game.randomTileWeights) // 当前实例使用的新方块权重
       },
       targetFnKey: keyFromState,                       // 目标函数标识
-      randomTileWeightsBySize: cloneWeightMap(this.randomTileWeightsBySize) // 尺寸→权重映射副本
+      randomTileWeightsBySize: cloneWeightMap(this.randomTileWeightsBySize), // 尺寸→权重映射副本
+      rngSeed: this.rngSeed,                           // 记录伪随机数种子，空字符串表示未固定
+      rngState: this._rng && typeof this._rng.peekState === 'function' ? this._rng.peekState() : null // 记录伪随机内部状态
     };
   }
 
@@ -157,12 +186,19 @@ export class LevelManager {
     const targetFn = resolveTargetFn(targetKey, targetFnRegistry); // 根据注册表查找目标函数
     const weightMap = cloneWeightMap(json.randomTileWeightsBySize); // 克隆尺寸→权重映射
 
+    const rngSeed = json.rngSeed === null || json.rngSeed === undefined || json.rngSeed === '' ? '' : String(json.rngSeed); // 解析并规范化种子
+    const rngFactory = targetFnRegistry && typeof targetFnRegistry.rngFactory === 'function'
+      ? targetFnRegistry.rngFactory
+      : null;                                         // 从注册表获取伪随机工厂
+
     const manager = new LevelManager({                // 基于解析后的数据创建实例
       startSize: size,
       carryScore,
       targetFn,
       targetFnKey: targetKey,
-      randomTileWeightsBySize: weightMap
+      randomTileWeightsBySize: weightMap,
+      rngSeed,
+      rngFactory
     });
 
     const total = Number(json.totalScoreBeforeThisLevel); // 读取累计分
@@ -194,6 +230,31 @@ export class LevelManager {
     const score = Number(gameData.score);             // 解析当前得分
     if (Number.isFinite(score)) restored.score = score; // 若为数字则覆盖
 
+    const rngState = json.rngState;                   // 读取伪随机内部状态
+    if (rngState !== undefined) manager._applyRngState(rngState); // 尝试恢复伪随机内部状态
+
     return manager;                                   // 返回恢复后的实例
+  }
+
+  // 导出当前状态快照：包含序列化数据与时间戳
+  snapshot() {
+    return { lm: this.toJSON(), t: Date.now() };       // 返回 JSON 结构与当前时间戳
+  }
+
+  // 从 JSON 数据恢复当前实例，相当于重建后替换内部字段
+  restore(json, registry = TARGET_FN_REGISTRY) {
+    const restored = LevelManager.fromJSON(json, registry); // 使用静态方法生成新实例
+    if (!(restored instanceof LevelManager)) return false;  // 未能成功恢复时返回 false
+    this.size = restored.size;                              // 替换棋盘尺寸
+    this.carryScore = restored.carryScore;                  // 替换累计策略
+    this.targetFn = restored.targetFn;                      // 替换目标函数实现
+    this.targetFnKey = restored.targetFnKey;                // 替换目标函数键
+    this.randomTileWeightsBySize = cloneWeightMap(restored.randomTileWeightsBySize); // 深拷贝尺寸→权重映射
+    this.totalScoreBeforeThisLevel = restored.totalScoreBeforeThisLevel; // 覆盖累计分
+    this.rngFactory = restored.rngFactory;                  // 更新伪随机工厂引用
+    this.rngSeed = restored.rngSeed;                        // 更新种子字符串
+    this._rng = restored._rng;                              // 更新伪随机函数引用
+    this.game = restored.getGame();                         // 替换 Game2048 实例
+    return true;                                            // 恢复成功返回 true
   }
 }
