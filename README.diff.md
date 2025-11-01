@@ -1,3 +1,4 @@
 | 时间 | 分支 | 提交哈希 | 改动文件 | 问题现象 | 分析 | 解决方案 | 验证方式 | 后续工作 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2024-01-01 | main | 初始化 | 全部骨架文件 | 仓库为空缺少结构 | 需求确认后搭建骨架 | 创建目录、文档与占位页 | 打开 web/index.html 与小程序占位页 | 后续轮次补齐核心逻辑 |
+| 2025-11-01 | main | N/A | core/game2048.esm.js、core/game2048.cjs.js、core/levels.esm.js、core/levels.cjs.js、web/dev-smoke-test.mjs、core/README.md、README.md、README.diff.md | 无（实现新功能） | 实现核心逻辑与关卡管理 | 新增双形态核心逻辑、关卡管理器与冒烟脚本，并更新文档 | node ./web/dev-smoke-test.mjs | 第 3 轮接入 Web Canvas 渲染与 HUD |
