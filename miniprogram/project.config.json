@@ -1,0 +1,22 @@
+{
+  "_comment_root": "小程序项目配置占位文件，导入开发者工具前请阅读注释。",
+  "appid": "your-appid-here",
+  "_comment_appid": "请替换为真实的微信小程序 appid，否则无法预览。",
+  "projectname": "Stage2048 Placeholder",
+  "_comment_projectname": "项目名称可在开发者工具中按需修改。",
+  "compileType": "miniProgram",
+  "_comment_compileType": "指定项目类型为普通小程序。",
+  "description": "Stage2048 初始占位工程",
+  "_comment_description": "简单描述当前项目用途，方便团队识别。",
+  "setting": {
+    "_comment_setting": "以下为开发者工具构建与上传行为设置。",
+    "es6": true,
+    "_comment_es6": "启用 ES6 转译以兼容旧版本基础库。",
+    "enhance": false,
+    "_comment_enhance": "暂不启用增强编译，后续视需求调整。",
+    "urlCheck": false,
+    "_comment_urlCheck": "禁用上传时的 URL 检查，方便本地调试。"
+  },
+  "miniprogramRoot": "./",
+  "_comment_miniprogramRoot": "设置小程序代码根目录为当前文件夹。"
+}

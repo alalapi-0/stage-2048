@@ -1,0 +1,5 @@
+<view class="container"><!-- 定义页面外层容器，实现居中布局 -->
+  <canvas type="2d" canvas-id="game" class="board"></canvas><!-- 占位 Canvas，后续用于绘制棋盘 -->
+  <view class="hint">第 4 轮将注入绘制与交互逻辑。</view><!-- 提示开发计划 -->
+  <view class="hint">请参考 README 按计划推进。</view><!-- 引导阅读文档 -->
+</view><!-- 容器结束 -->

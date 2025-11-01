@@ -1,0 +1,16 @@
+{
+  "_comment_root": "小程序全局配置占位文件。",
+  "pages": [
+    "pages/index/index"
+  ],
+  "_comment_pages": "当前仅注册了一个首页，后续可扩展更多页面。",
+  "window": {
+    "_comment_window": "设置默认窗口表现。",
+    "navigationBarTitleText": "Stage2048 占位",
+    "_comment_navigationBarTitleText": "导航栏标题展示项目名称。",
+    "navigationBarBackgroundColor": "#f5f5f5",
+    "_comment_navigationBarBackgroundColor": "导航栏背景色与 Web 占位页保持一致。",
+    "backgroundColor": "#f5f5f5",
+    "_comment_backgroundColor": "设置下拉刷新背景色为浅灰。"
+  }
+}
