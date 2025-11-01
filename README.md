@@ -26,6 +26,39 @@ stage-2048
 | 5 | 参数化与持久化 | 统一配置、bestScore、总分累计 | Web/localStorage 与小程序存储正常 |
 | 6 | 质量与文档收尾 | 规范、FAQ、问题记录模板 | 文档完善，无二进制入库 |
 
+## 核心逻辑
+本轮新增 `core/` 目录下的通用逻辑，可在浏览器或 Node 中直接调用。以下示例展示如何使用 ES 模块版本的 `Game2048` 与 `LevelManager`：
+
+```js
+import { Game2048 } from './core/game2048.esm.js';
+import { LevelManager } from './core/levels.esm.js';
+
+const game = new Game2048({ size: 4 });
+if (game.canMove()) {
+  const moved = game.move('left');
+  console.log('是否发生移动：', moved, '当前得分：', game.getScore());
+}
+console.table(game.getGrid());
+
+const manager = new LevelManager({ startSize: 2 });
+console.log('当前关卡目标值：', manager.getTarget());
+if (manager.checkPass()) {
+  manager.nextLevel();
+  console.log('晋级后关卡编号：', manager.getLevel());
+}
+```
+
+关卡管理器会在 `checkPass()` 返回 `true` 时调用 `nextLevel()`，自动提升棋盘尺寸并沿用或覆写随机权重。
+
+## 本地验证 / 冒烟测试
+使用以下命令运行 Node 版冒烟脚本，快速确认核心逻辑与关卡推进是否生效：
+
+```bash
+node ./web/dev-smoke-test.mjs
+```
+
+脚本会在控制台打印关卡通关、步数与分数信息，结束时使用 `console.table` 输出棋盘快照，便于目视检查状态是否合理。
+
 ## 用户需填写的参数
 | 字段 | 位置 | 类型/示例 | 默认 | 说明 |
 | --- | --- | --- | --- | --- |
