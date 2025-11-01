@@ -1,5 +1,5 @@
 <!-- /miniprogram/pages/index/index.wxml -->
-<!-- 说明：小程序首页，包含一个画布与若干信息文本和按钮。通过数据绑定显示关卡、目标、分数等。 -->
+<!-- 说明：小程序首页，包含画布、信息栏以及操作按钮，新增重置进度与清空最佳分功能。 -->
 
 <view class="wrap">
   <!-- 标题 -->
@@ -7,8 +7,7 @@
     <text class="title">Stage2048（关卡 2048）</text>
   </view>
 
-  <!-- 画布：同时设置 CSS 尺寸与实际像素宽高，便于清晰绘制 -->
-  <!-- 绑定触摸事件以识别滑动方向 -->
+  <!-- 画布：同时设置 CSS 尺寸与实际像素宽高，绑定触摸事件用于识别滑动方向 -->
   <canvas
     id="game"
     canvas-id="game"
@@ -32,8 +31,10 @@
     <text class="score">最佳 {{bestScore}}</text>
   </view>
 
-  <!-- 操作区：重开本关 -->
+  <!-- 操作区：重开本关 / 重置进度 / 清空最佳分 -->
   <view class="row">
     <button class="btn" bindtap="onRestart">重开本关</button>
+    <button class="btn" bindtap="onResetProgress">重置进度</button>
+    <button class="btn" bindtap="onClearBest">清空最佳分</button>
   </view>
 </view>
