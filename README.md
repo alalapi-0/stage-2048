@@ -60,6 +60,13 @@ if (manager.checkPass()) {
 - `/core/config.schema.md` 与 `/docs/CONFIG_GUIDE.md` 详细列出可配置字段及其载入优先级，默认配置在 Web 与小程序端自动加载。
 - **Web 端**：使用 `localStorage` 存储设置（`stage2048.settings.v2`）、进度（`stage2048.progress.v2`）与最佳分（`stage2048.bestScore.v1`），支持 URL Query 覆盖以及导入/导出 JSON。
 - **小程序端**：使用 `wx.setStorageSync`/`wx.getStorageSync` 存储设置（`stage2048.mp.settings.v2`）、进度（`stage2048.mp.progress.v2`）与最佳分（`stage2048.mp.bestScore.v1`），并提供“重置进度”“清空最佳分”按钮。
+
+## 关卡包
+- 关卡包允许通过 JSON 定义连续关卡的尺寸、目标函数与随机权重，导入后会优先按照包内顺序推进，超出包长时自动回退到默认的尺寸递增模式。
+- Web 端在主页面提供“导入关卡包（JSON）”与“清除关卡包”按钮，对应存储键为 `stage2048.levelpack.v1`，提示区域会展示包名与关卡数。
+- 小程序端在首页提供“导入关卡包”与“清除关卡包”按钮，读取剪贴板 JSON 写入 `stage2048.mp.levelpack.v1`，导入成功会立即重建当前关卡。
+- 示例包位于 `web/packs/sample-pack.json`，详细格式、校验规则与排障手册见《[关卡包使用指南](./docs/LEVEL_PACKS_GUIDE.md)》。
+
 <!-- 规则编辑器章节标题 -->
 ## 规则编辑器
 <!-- 规则编辑器入口说明 -->

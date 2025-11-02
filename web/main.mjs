@@ -9,7 +9,9 @@ const STORE = {
   settings: 'stage2048.settings.v2',                  // 保存 Web 端设置（含种子与动画）
   progress: 'stage2048.progress.v2',                  // 保存关卡进度（含伪随机状态）
   best: 'stage2048.bestScore.v1',                     // 保存最佳分
-  maxTile: 'stage2048.maxTile.v1'                     // 保存历史最大方块值
+  maxTile: 'stage2048.maxTile.v1',                    // 保存历史最大方块值
+  levelpack: 'stage2048.levelpack.v1',                // 保存关卡包 JSON 字符串
+  levelpackIndex: 'stage2048.levelpackIndex.v1'       // 保存当前关卡包索引
 };
 
 const LEGACY_STORE = {
@@ -53,6 +55,7 @@ const COLORS = {
 };
 
 const ANIMATE = true;                                  // 全局动画逻辑开关，配合 SETTINGS.animate 决定是否执行淡入
+const LEVEL_PACK_SUM_TOLERANCE = 0.001;                // 关卡包随机权重和允许的误差范围
 
 // 读取页面元素引用
 const canvas = document.getElementById('game');        // 画布节点
@@ -72,6 +75,9 @@ const btnExport = document.getElementById('btn-export');                // 导�
 const inputImport = document.getElementById('input-import');            // 导入文件输入
 const inputHighContrast = document.getElementById('hc');                // 高对比度模式复选框
 const inputDemo = document.getElementById('demo');     // 演示模式开关
+const inputPack = document.getElementById('btn-pack'); // 关卡包导入文件输入
+const btnPackClear = document.getElementById('btn-pack-clear'); // 关卡包清除按钮
+const elPackTip = document.getElementById('pack-tip'); // 关卡包提示文本元素
 const form = document.getElementById('settings-form');                 // 设置表单
 const inputCanvasSize = document.getElementById('input-canvas-size');  // 画布尺寸输入框
 const inputGap = document.getElementById('input-gap');                 // 间隙输入框
@@ -104,6 +110,7 @@ let replayRaf = 0;                                    // 复盘调度句柄
 let replayLastTick = 0;                               // 复盘上一次执行时间戳
 let maxTileHistory = 0;                               // 历史最大方块值（用于成就）
 let drawQueued = false;                               // 是否已有绘制请求排队
+let levelPackState = { pack: null, index: 0 };         // 关卡包运行时状态（含配置与当前索引）
 
 const ANIMATION_DURATION = 160;                       // 单次淡入动画的持续时间（毫秒）
 const DEMO_INTERVAL = 160;                            // 演示模式每步尝试间隔（毫秒）
@@ -213,6 +220,353 @@ function sanitizeSettings(patch, fallback = DEFAULT_SETTINGS) {
   }
 
   return base;                                        // 返回合并后的新对象
+}
+
+function normalizeLevelPack(raw) {                    // 将原始关卡包数据校验并标准化
+  const errors = [];                                   // 准备错误信息数组
+  if (!raw || typeof raw !== 'object') {               // 若根节点不是对象
+    errors.push('关卡包需要是对象');                     // 记录错误信息
+    return { valid: false, errors, normalized: null }; // 返回失败结果
+  }
+  const normalized = {                                 // 构建标准化结果骨架
+    name: '',                                          // 默认名称为空
+    version: 1,                                        // 默认版本为 1
+    levels: []                                         // 初始化关卡数组
+  };
+  if (typeof raw.name === 'string') {                  // 若提供名称且为字符串
+    normalized.name = raw.name.trim();                 // 去除空白后写入
+  } else if (raw.name !== undefined && raw.name !== null) { // 若提供但类型不符
+    errors.push('name 必须是字符串');                    // 追加错误信息
+  }
+  if (raw.version !== undefined && raw.version !== null) { // 若提供版本号
+    const versionNum = Number(raw.version);            // 转换为数字
+    if (!Number.isInteger(versionNum) || versionNum <= 0) { // 必须为正整数
+      errors.push('version 必须是正整数');                // 记录错误
+    } else {
+      normalized.version = versionNum;                // 合法时写入结果
+    }
+  }
+  if (!Array.isArray(raw.levels) || raw.levels.length === 0) { // 校验关卡数组
+    errors.push('levels 必须是非空数组');                // 记录错误信息
+    return { valid: false, errors, normalized: null }; // 无关卡时直接返回失败
+  }
+  const supportedTargets = Object.keys(TARGET_FN_REGISTRY || {}); // 获取已注册目标函数键
+  raw.levels.forEach((lvRaw, idx) => {                // 遍历每个关卡定义
+    const levelErrors = [];                            // 准备关卡级错误列表
+    if (!lvRaw || typeof lvRaw !== 'object') {         // 关卡必须是对象
+      levelErrors.push('关卡必须是对象');               // 记录错误
+    }
+    const levelNormalized = {                          // 初始化标准化后的关卡
+      size: 0,                                         // 棋盘尺寸占位
+      targetFnKey: null,                               // 目标函数键占位
+      randomTileWeights: null                          // 新生权重占位
+    };
+    if (lvRaw && typeof lvRaw === 'object') {          // 仅在对象时继续校验
+      const sizeNum = Number(lvRaw.size);              // 将尺寸转换为数字
+      if (!Number.isInteger(sizeNum) || sizeNum < 2 || sizeNum > 10) { // 尺寸需合法
+        levelErrors.push('size 需要是 2~10 的整数');      // 记录错误
+      } else {
+        levelNormalized.size = sizeNum;               // 合法尺寸写入
+      }
+      if (lvRaw.targetFnKey !== undefined && lvRaw.targetFnKey !== null) { // 处理目标函数键
+        if (typeof lvRaw.targetFnKey !== 'string') {   // 必须为字符串
+          levelErrors.push('targetFnKey 必须是字符串'); // 记录错误
+        } else {
+          const key = lvRaw.targetFnKey.trim();       // 去除空白
+          if (supportedTargets.length > 0 && !supportedTargets.includes(key)) { // 注册表存在但未找到
+            levelErrors.push(`targetFnKey ${key} 未注册`); // 记录错误
+          } else {
+            levelNormalized.targetFnKey = key || null; // 合法键写入结果
+          }
+        }
+      }
+      if (lvRaw.randomTileWeights !== undefined && lvRaw.randomTileWeights !== null) { // 处理新生权重
+        if (!lvRaw.randomTileWeights || typeof lvRaw.randomTileWeights !== 'object' || Array.isArray(lvRaw.randomTileWeights)) {
+          levelErrors.push('randomTileWeights 必须是对象'); // 非对象时记录错误
+        } else {
+          const weightMap = {};                         // 准备整理后的权重表
+          let sum = 0;                                  // 累计概率和
+          let hasInvalid = false;                       // 标记是否出现非法项
+          for (const key of Object.keys(lvRaw.randomTileWeights)) { // 遍历每个条目
+            const numKey = Number(key);                 // 转换键为数字
+            const numVal = Number(lvRaw.randomTileWeights[key]); // 转换值为数字
+            if (!Number.isFinite(numKey)) {             // 键必须为有限数
+              levelErrors.push(`randomTileWeights 的键 ${key} 不是数字`); // 记录错误
+              hasInvalid = true;                        // 标记非法
+              continue;                                 // 跳过后续逻辑
+            }
+            if (!Number.isFinite(numVal)) {             // 值必须为有限数
+              levelErrors.push(`randomTileWeights[${key}] 不是数字`); // 记录错误
+              hasInvalid = true;                        // 标记非法
+              continue;                                 // 跳过写入
+            }
+            if (!(numVal > 0 && numVal <= 1)) {         // 值需落在 (0,1]
+              levelErrors.push(`randomTileWeights[${key}] 需要落在 (0,1] 区间`); // 记录错误
+              hasInvalid = true;                        // 标记非法
+              continue;                                 // 跳过写入
+            }
+            weightMap[String(numKey)] = numVal;        // 写入整理后的权重
+            sum += numVal;                              // 累计总和
+          }
+          if (!hasInvalid) {                            // 无非法条目时继续校验
+            const keys = Object.keys(weightMap);        // 获取整理后的键集合
+            if (keys.length === 0) {                    // 至少需要一项
+              levelErrors.push('randomTileWeights 至少需要一项'); // 记录错误
+            } else if (Math.abs(sum - 1) > LEVEL_PACK_SUM_TOLERANCE) { // 检查概率和
+              levelErrors.push('randomTileWeights 的概率之和需要接近 1'); // 概率不为 1 时记录错误
+            } else {
+              levelNormalized.randomTileWeights = weightMap; // 合法时写入结果
+            }
+          }
+        }
+      }
+    }
+    if (levelErrors.length > 0) {                       // 若存在错误
+      levelErrors.forEach((msg) => errors.push(`levels[${idx}]: ${msg}`)); // 将错误附加索引后加入总列表
+    } else {
+      normalized.levels.push(levelNormalized);         // 通过校验的关卡加入结果
+    }
+  });
+  if (normalized.levels.length === 0) {                 // 若没有任何合法关卡
+    errors.push('关卡包需要至少包含一个合法关卡');        // 追加错误信息
+  }
+  return {                                              // 返回综合结果
+    valid: errors.length === 0,                         // 布尔标记是否通过
+    errors,                                             // 错误数组
+    normalized: errors.length === 0 ? normalized : null // 成功时返回标准化数据
+  };
+}
+
+function validateLevelPack(raw) {                      // 包装函数以布尔值形式返回校验结果
+  const result = normalizeLevelPack(raw);               // 调用标准化逻辑
+  if (!result.valid) {                                  // 校验失败时
+    console.warn('[Stage2048] 关卡包校验失败：', result.errors); // 输出错误列表
+    return false;                                       // 返回 false 表示无效
+  }
+  return true;                                          // 校验通过返回 true
+}
+
+function loadStoredLevelPack() {                        // 从本地存储读取并校验关卡包
+  try {
+    const txt = localStorage.getItem(STORE.levelpack);  // 读取存储文本
+    if (!txt) return null;                              // 未存储时返回 null
+    const parsed = JSON.parse(txt);                     // 解析 JSON 文本
+    const result = normalizeLevelPack(parsed);          // 校验并标准化
+    if (!result.valid) {                                // 无效时
+      console.warn('[Stage2048] 存储的关卡包无效：', result.errors); // 提示错误
+      return null;                                      // 返回 null 放弃使用
+    }
+    return result.normalized;                           // 返回标准化后的对象
+  } catch (err) {
+    console.warn('[Stage2048] 读取关卡包失败：', err);    // 捕获异常并提示
+    return null;                                        // 返回 null 继续默认流程
+  }
+}
+
+function saveLevelPack(pack) {                          // 将合法关卡包写入存储
+  try {
+    localStorage.setItem(STORE.levelpack, JSON.stringify(pack)); // 序列化并存储
+  } catch (err) {
+    console.warn('[Stage2048] 写入关卡包失败：', err);     // 写入异常时提示
+  }
+}
+
+function clearLevelPackStorage() {                      // 从存储中移除关卡包
+  try {
+    localStorage.removeItem(STORE.levelpack);           // 删除对应键
+  } catch (err) {
+    console.warn('[Stage2048] 清除关卡包失败：', err);     // 输出异常
+  }
+}
+
+function loadLevelPackIndex() {                         // 读取关卡包索引
+  try {
+    const raw = localStorage.getItem(STORE.levelpackIndex); // 读取文本
+    if (!raw) return 0;                                 // 未保存时返回 0
+    const num = Number(raw);                            // 转换为数字
+    return Number.isInteger(num) && num >= 0 ? num : 0; // 非负整数才视为有效
+  } catch (err) {
+    console.warn('[Stage2048] 读取关卡包索引失败：', err);  // 输出异常
+    return 0;                                           // 异常时回退为 0
+  }
+}
+
+function saveLevelPackIndex(idx) {                      // 将索引写入本地存储
+  try {
+    localStorage.setItem(STORE.levelpackIndex, String(idx)); // 转换为字符串并写入
+  } catch (err) {
+    console.warn('[Stage2048] 写入关卡包索引失败：', err);  // 写入失败时提示
+  }
+}
+
+function clearLevelPackIndex() {                        // 清除存储中的关卡包索引
+  try {
+    localStorage.removeItem(STORE.levelpackIndex);      // 删除对应键
+  } catch (err) {
+    console.warn('[Stage2048] 清除关卡包索引失败：', err);  // 输出异常
+  }
+}
+
+function persistCurrentLevelPackIndex() {               // 按当前状态写回索引
+  if (!levelPackState.pack) {                           // 未启用关卡包时
+    clearLevelPackIndex();                              // 清除索引存储
+    return;                                             // 直接返回
+  }
+  saveLevelPackIndex(levelPackState.index);             // 写入当前索引
+}
+
+function clampLevelPackIndex() {                        // 根据关卡包长度修正索引
+  if (!levelPackState.pack) {                           // 无关卡包配置时
+    levelPackState.index = 0;                           // 索引回退为 0
+    return;                                             // 结束
+  }
+  const total = levelPackState.pack.levels.length;      // 读取关卡总数
+  if (total <= 0) {                                     // 若数组为空
+    levelPackState.pack = null;                         // 清空配置
+    levelPackState.index = 0;                           // 索引重置
+    clearLevelPackStorage();                            // 移除无效存储
+    clearLevelPackIndex();                              // 移除索引存储
+    return;                                             // 结束
+  }
+  if (levelPackState.index < 0) levelPackState.index = 0; // 下限保护
+  if (levelPackState.index > total) levelPackState.index = total; // 上限保护（允许等于总数表示已完成）
+}
+
+function syncLevelPackStateFromStorage() {              // 从本地存储同步关卡包状态
+  levelPackState = {                                    // 组装最新状态
+    pack: loadStoredLevelPack(),                        // 读取并校验关卡包
+    index: loadLevelPackIndex()                         // 读取索引
+  };
+  clampLevelPackIndex();                                // 修正索引范围
+  persistCurrentLevelPackIndex();                       // 写回一次确保一致
+}
+
+function getActivePackLevel() {                         // 获取当前索引对应的关卡定义
+  if (!levelPackState.pack) return null;                // 未启用关卡包返回 null
+  const levels = levelPackState.pack.levels;            // 提取关卡数组
+  if (!Array.isArray(levels) || levels.length === 0) return null; // 无合法关卡时返回 null
+  if (levelPackState.index >= levels.length) return null; // 索引越界表示已完成
+  return levels[levelPackState.index];                  // 返回当前关卡定义
+}
+
+function applyTargetForLevel(level) {                   // 根据关卡定义选择目标函数
+  const fallbackKey = sanitizeTargetFnKey(SETTINGS.LEVELS.targetFnKey, 'power'); // 计算默认目标键
+  const fallbackFn = TARGET_FN_REGISTRY[fallbackKey] || TARGET_FN_REGISTRY.power; // 计算默认目标函数
+  if (!LM) return;                                      // 管理器尚未创建时直接返回
+  if (level && level.targetFnKey && TARGET_FN_REGISTRY[level.targetFnKey]) { // 若关卡指定目标且可用
+    LM.targetFnKey = level.targetFnKey;                // 覆盖目标函数键
+    LM.targetFn = TARGET_FN_REGISTRY[level.targetFnKey]; // 覆盖目标函数
+  } else {
+    LM.targetFnKey = fallbackKey;                      // 回退到默认键
+    LM.targetFn = fallbackFn;                          // 使用默认函数
+  }
+}
+
+function applyWeightsForSize(size, weights) {           // 为指定尺寸写入新生权重
+  if (!LM) return;                                      // 管理器不存在时跳过
+  if (!LM.randomTileWeightsBySize || typeof LM.randomTileWeightsBySize !== 'object') {
+    LM.randomTileWeightsBySize = {};                   // 确保映射存在
+  }
+  if (weights && typeof weights === 'object') {         // 若提供关卡自定义权重
+    const cloned = {};                                  // 创建浅拷贝避免引用共享
+    for (const key of Object.keys(weights)) {           // 遍历每个条目
+      cloned[key] = weights[key];                       // 逐项复制
+    }
+    LM.randomTileWeightsBySize[size] = cloned;          // 写入指定尺寸的权重
+  } else if (SETTINGS.LEVELS.randomTileWeightsBySize && SETTINGS.LEVELS.randomTileWeightsBySize[size]) {
+    LM.randomTileWeightsBySize[size] = cloneWeightMap({ [size]: SETTINGS.LEVELS.randomTileWeightsBySize[size] })[size]; // 恢复设定中的默认权重
+  } else {
+    delete LM.randomTileWeightsBySize[size];            // 无默认配置时删除条目以使用核心默认
+  }
+}
+
+function applyLevelPackForCurrentLevel() {              // 应用当前索引的关卡包参数
+  const level = getActivePackLevel();                   // 读取关卡定义
+  if (!level) {                                         // 若无可用关卡
+    applyTargetForLevel(null);                          // 恢复默认目标函数
+    return;                                             // 结束
+  }
+  applyTargetForLevel(level);                           // 应用目标函数覆盖
+  applyWeightsForSize(level.size, level.randomTileWeights); // 应用新生权重
+  if (LM && LM.size !== level.size) {                   // 若管理器当前尺寸不符
+    LM.size = level.size;                               // 直接同步尺寸
+    LM._createGame();                                   // 重新生成当前关卡实例
+  }
+}
+
+function prepareNextLevelWithPack() {                   // 在进入下一关前调整关卡包状态
+  if (!levelPackState.pack) {                           // 未启用关卡包
+    applyTargetForLevel(null);                          // 保证目标函数回退默认
+    return;                                             // 直接结束
+  }
+  const levels = levelPackState.pack.levels;            // 提取关卡数组
+  const total = Array.isArray(levels) ? levels.length : 0; // 计算总关卡数
+  if (total === 0) {                                    // 若数组为空
+    levelPackState.pack = null;                         // 清空配置
+    levelPackState.index = 0;                           // 重置索引
+    clearLevelPackStorage();                            // 移除无效数据
+    clearLevelPackIndex();                              // 移除索引
+    applyTargetForLevel(null);                          // 恢复默认目标函数
+    return;                                             // 结束
+  }
+  if (levelPackState.index < total - 1) {               // 若还有下一关
+    levelPackState.index += 1;                          // 索引递增
+    persistCurrentLevelPackIndex();                     // 写回存储
+    const nextLevel = levels[levelPackState.index];     // 读取下一关配置
+    applyTargetForLevel(nextLevel);                     // 应用目标函数
+    applyWeightsForSize(nextLevel.size, nextLevel.randomTileWeights); // 应用权重
+    LM.size = Math.max(1, nextLevel.size - 1);          // 调整尺寸使下一关落在目标尺寸
+    return;                                             // 完成本轮准备
+  }
+  levelPackState.index = total;                         // 没有下一关则标记完成
+  persistCurrentLevelPackIndex();                       // 写回存储
+  applyTargetForLevel(null);                            // 恢复默认目标函数
+  applyWeightsForSize(LM.size + 1, null);               // 下一尺寸使用默认权重
+}
+
+function updateLevelPackTip(customText) {               // 更新界面上的关卡包状态提示
+  if (!elPackTip) return;                               // 若无提示元素则直接返回
+  if (typeof customText === 'string' && customText.trim()) { // 若传入自定义提示
+    elPackTip.textContent = customText.trim();          // 直接显示自定义文案
+    return;                                             // 结束
+  }
+  if (!levelPackState.pack) {                           // 未启用关卡包
+    elPackTip.textContent = '当前未加载关卡包，将按默认尺寸递增推进。'; // 显示默认提示
+    return;                                             // 结束
+  }
+  const pack = levelPackState.pack;                     // 读取关卡包信息
+  const total = pack.levels.length;                     // 统计关卡数量
+  const name = pack.name ? `《${pack.name}》` : '（未命名包）'; // 构造包名称
+  if (levelPackState.index >= total) {                  // 若所有关卡已完成
+    elPackTip.textContent = `已加载关卡包${name}，共 ${total} 关，已全部完成，后续按默认规则推进。`; // 提示完成状态
+    return;                                             // 结束
+  }
+  const current = levelPackState.index + 1;             // 当前关卡编号（人类视角）
+  elPackTip.textContent = `已加载关卡包${name}，共 ${total} 关，当前位于第 ${current} 关。`; // 显示进行中状态
+}
+
+function rebuildAfterLevelPackChange(alertText, tipText) { // 关卡包变更后重建关卡实例
+  if (demoActive) stopDemo('已因关卡包变更停止演示'); // 关卡包变更需终止演示模式
+  if (isReplaying) {                                   // 若正在复盘则提前停止
+    isReplaying = false;                               // 清除复盘标记
+    replayQueue = null;                                // 清空复盘队列
+    if (replayRaf) cancelAnimationFrame(replayRaf);    // 取消复盘动画帧
+    replayRaf = 0;                                     // 重置调度句柄
+  }
+  removeStored(STORE.progress);                        // 清除旧的进度存档
+  LM = createLevelManagerFromSettings();               // 重新创建关卡管理器
+  applyLevelPackForCurrentLevel();                     // 根据最新索引应用关卡配置
+  game = LM.getGame();                                 // 获取新的游戏实例
+  resizeCanvas();                                      // 同步画布尺寸
+  persistProgress();                                   // 持久化新的初始状态
+  ops = [];                                            // 清空操作记录
+  undoSnapshot = null;                                 // 清空撤销快照
+  cancelAnimation();                                   // 确保无动画残留
+  queueDraw();                                         // 重新绘制棋盘
+  syncHud();                                           // 同步 HUD 与提示
+  if (typeof tipText === 'string') updateLevelPackTip(tipText); // 若指定自定义提示则覆盖
+  if (alertText) window.alert(alertText);              // 通过弹窗反馈给用户
+  announce(alertText || '关卡包已更新');               // 播报变更结果
 }
 
 // 从本地存储读取 JSON 并解析
@@ -420,15 +774,33 @@ function parseUrlOverrides() {
 
 // 基于当前 SETTINGS 创建新的 LevelManager 实例
 function createLevelManagerFromSettings() {
-  const key = sanitizeTargetFnKey(SETTINGS.LEVELS.targetFnKey, 'power'); // 确认目标函数键合法
-  const targetFn = TARGET_FN_REGISTRY[key] || TARGET_FN_REGISTRY.power;  // 查找目标函数
-  const seedTrimmed = typeof SETTINGS.seed === 'string' ? SETTINGS.seed.trim() : '';
-  const options = {
-    startSize: SETTINGS.LEVELS.startSize,
+  const defaultKey = sanitizeTargetFnKey(SETTINGS.LEVELS.targetFnKey, 'power'); // 默认目标函数键
+  let targetKey = defaultKey;                              // 初始化为默认目标键
+  let targetFn = TARGET_FN_REGISTRY[targetKey] || TARGET_FN_REGISTRY.power; // 初始化目标函数
+  let startSize = SETTINGS.LEVELS.startSize;              // 默认起始尺寸
+  const weightsMap = cloneWeightMap(SETTINGS.LEVELS.randomTileWeightsBySize); // 克隆默认权重表
+  const level = getActivePackLevel();                     // 读取当前关卡包定义
+  if (level) {                                            // 若存在关卡包定义
+    startSize = level.size;                               // 使用关卡包指定的尺寸
+    if (level.targetFnKey && TARGET_FN_REGISTRY[level.targetFnKey]) { // 关卡包指定目标函数
+      targetKey = level.targetFnKey;                      // 覆盖目标函数键
+      targetFn = TARGET_FN_REGISTRY[level.targetFnKey];   // 使用对应函数
+    }
+    if (level.randomTileWeights) {                        // 关卡包自定义新生权重
+      const cloned = {};                                  // 创建浅拷贝避免共享引用
+      for (const key of Object.keys(level.randomTileWeights)) { // 遍历每个条目
+        cloned[key] = level.randomTileWeights[key];       // 逐项复制
+      }
+      weightsMap[startSize] = cloned;                     // 将权重写入对应尺寸
+    }
+  }
+  const seedTrimmed = typeof SETTINGS.seed === 'string' ? SETTINGS.seed.trim() : ''; // 规范化种子
+  const options = {                                       // 构造关卡管理器参数
+    startSize,
     carryScore: SETTINGS.LEVELS.carryScore,
     targetFn,
-    targetFnKey: key,
-    randomTileWeightsBySize: cloneWeightMap(SETTINGS.LEVELS.randomTileWeightsBySize)
+    targetFnKey: targetKey,
+    randomTileWeightsBySize: weightsMap
   };
   if (seedTrimmed) {                                   // 有固定种子时附加伪随机参数
     options.rngSeed = seedTrimmed;
@@ -473,6 +845,7 @@ function persistSettings() {
 function persistProgress() {
   if (!LM) return;
   saveJSON(STORE.progress, LM.toJSON());
+  persistCurrentLevelPackIndex();
 }
 
 // 保存最佳分
@@ -517,6 +890,10 @@ function init() {
   const urlPatch = parseUrlOverrides();
   if (urlPatch) SETTINGS = sanitizeSettings(urlPatch, SETTINGS);
 
+  // 步骤 3.5：同步关卡包状态
+  syncLevelPackStateFromStorage();
+  updateLevelPackTip();
+
   // 步骤 4：同步设置到表单
   applySettingsToForm();
 
@@ -553,6 +930,24 @@ function init() {
   } else {
     LM = createLevelManagerFromSettings();
   }
+
+  if (levelPackState.pack) {                           // 若存在已加载的关卡包
+    const levels = levelPackState.pack.levels;          // 读取关卡包中的关卡数组
+    if (Array.isArray(levels) && levels.length > 0 && LM) { // 确保数组有效且管理器已就绪
+      const foundIdx = levels.findIndex((item) => item.size === LM.size); // 根据当前尺寸匹配索引
+      if (foundIdx >= 0) {                              // 找到匹配项时
+        levelPackState.index = foundIdx;                // 将索引对齐至匹配位置
+      } else if (LM.size > levels[levels.length - 1].size) { // 超出包尾时
+        levelPackState.index = levels.length;           // 视为已完成关卡包
+      } else {
+        levelPackState.index = 0;                       // 未匹配则回退到首关
+      }
+      persistCurrentLevelPackIndex();                   // 将校正后的索引写回存储
+    }
+  }
+
+  applyLevelPackForCurrentLevel();                      // 应用当前索引对应的关卡设置
+  updateLevelPackTip();                                 // 更新关卡包提示信息
 
   // 步骤 7：获取 Game2048 实例
   game = LM.getGame();
@@ -696,6 +1091,7 @@ function syncHud() {
   elLevel.setAttribute('aria-label', `当前关卡 ${lv}，棋盘 ${size} 乘 ${size}`); // 为关卡文本添加朗读提示
   elTarget.textContent = `目标 ${target}`;
   elTarget.setAttribute('aria-label', `当前目标 ${target}`); // 为目标文本添加朗读提示
+  updateLevelPackTip();
 }
 
 // ===== 游戏逻辑操作 =====
@@ -714,10 +1110,13 @@ function restartLevel() {
 
 function enterNextLevel() {
   if (demoActive) stopDemo('已因进入下一关停止演示'); // 进入下一关时关闭演示模式
+  prepareNextLevelWithPack();
   LM.nextLevel();
+  applyLevelPackForCurrentLevel();
   game = LM.getGame();
   resizeCanvas();
   persistProgress();
+  updateLevelPackTip();
   ops = [];                                           // 新关卡重置操作序列
   undoSnapshot = null;                                // 清空撤销记录
   cancelAnimation();                                  // 取消可能存在的动画
@@ -930,6 +1329,8 @@ function startReplay(seed, sequence) {
   applySettingsToForm();                               // 同步表单显示
   persistSettings();                                   // 保存设置
   LM = createLevelManagerFromSettings();               // 基于种子重建关卡
+  applyLevelPackForCurrentLevel();                     // 依据当前索引应用关卡包
+  updateLevelPackTip();                                // 同步提示文本
   game = LM.getGame();                                 // 更新游戏实例
   resizeCanvas();                                      // 根据设置更新画布
   ops = [];                                            // 清空操作序列
@@ -956,6 +1357,8 @@ function handleSettingsChange() {
   }
   if (!suppressSettingsNotice) window.alert('设置已更新，当前关卡已按新配置重置。');
   LM = createLevelManagerFromSettings();
+  applyLevelPackForCurrentLevel();
+  updateLevelPackTip();
   game = LM.getGame();
   resizeCanvas();
   persistProgress();
@@ -975,7 +1378,11 @@ function handleResetProgress() {
     if (replayRaf) cancelAnimationFrame(replayRaf);
     replayRaf = 0;
   }
-  LM = createLevelManagerFromSettings();
+  LM = createLevelManagerFromSettings();               // 根据当前设置重建管理器
+  levelPackState.index = 0;                            // 重置关卡包索引回到首关
+  persistCurrentLevelPackIndex();                      // 将索引写入或清除存储
+  applyLevelPackForCurrentLevel();                     // 应用当前索引对应的关卡参数
+  updateLevelPackTip();                                // 更新提示区域信息
   game = LM.getGame();
   resizeCanvas();
   persistProgress();
@@ -1086,6 +1493,22 @@ function applyImportedState(data) {
     nextManager = createLevelManagerFromSettings();
   }
   LM = nextManager;                                     // 更新关卡管理器
+  if (levelPackState.pack) {                            // 若启用了关卡包
+    const levels = levelPackState.pack.levels;          // 读取关卡数组
+    if (Array.isArray(levels) && levels.length > 0) {   // 确保数组有效
+      const match = levels.findIndex((item) => item.size === LM.size); // 尝试匹配尺寸
+      if (match >= 0) {                                 // 找到匹配项
+        levelPackState.index = match;                   // 对齐索引
+      } else if (LM.size > levels[levels.length - 1].size) { // 超出关卡包范围
+        levelPackState.index = levels.length;           // 视为已完成关卡包
+      } else {
+        levelPackState.index = 0;                       // 其他情况回退到首关
+      }
+      persistCurrentLevelPackIndex();                   // 持久化索引
+    }
+  }
+  applyLevelPackForCurrentLevel();                      // 根据索引应用关卡参数
+  updateLevelPackTip();                                 // 同步提示文案
   SETTINGS.LEVELS.targetFnKey = sanitizeTargetFnKey(LM.targetFnKey, SETTINGS.LEVELS.targetFnKey); // 同步目标函数键
   SETTINGS.LEVELS.randomTileWeightsBySize = cloneWeightMap(LM.randomTileWeightsBySize); // 同步权重
   game = LM.getGame();                                  // 获取游戏实例
@@ -1141,6 +1564,54 @@ function bindEvents() {
     const file = e.target.files && e.target.files[0];
     if (file) handleImportFile(file);
   });
+  if (inputPack) {                                      // 绑定关卡包导入事件
+    inputPack.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0]; // 读取用户选择的文件
+      if (!file) return;                                // 未选择文件则直接返回
+      try {
+        const text = await file.text();                // 异步读取文件文本
+        let parsed = null;                              // 准备解析后的对象变量
+        try {
+          parsed = JSON.parse(text);                   // 尝试解析 JSON
+        } catch (err) {
+          console.warn('[Stage2048] 关卡包解析失败：', err); // 控制台输出解析异常
+          window.alert('关卡包解析失败，请确认文件内容为合法 JSON。'); // 弹窗提示用户
+          updateLevelPackTip('关卡包解析失败，请重新导入。'); // 提示区域给出失败信息
+          announce('关卡包导入失败');                   // 播报导入失败
+          return;                                       // 终止后续流程
+        }
+        const result = normalizeLevelPack(parsed);      // 校验并标准化关卡包
+        if (!result.valid) {                            // 校验未通过
+          console.warn('[Stage2048] 关卡包校验失败：', result.errors); // 控制台输出错误列表
+          window.alert(`关卡包校验失败：\n${result.errors.join('\n')}`); // 弹窗列出错误信息
+          updateLevelPackTip('关卡包校验失败，请查看提示并修正后重试。'); // 提示区域说明原因
+          announce('关卡包导入失败');                   // 播报导入失败
+          return;                                       // 停止处理
+        }
+        levelPackState.pack = result.normalized;        // 写入关卡包配置
+        levelPackState.index = 0;                       // 导入新包时索引重置
+        saveLevelPack(result.normalized);               // 将关卡包保存到本地
+        persistCurrentLevelPackIndex();                 // 同步索引存储
+        rebuildAfterLevelPackChange('关卡包导入成功，下次进入下一关时生效。', '关卡包已导入，下次重开或进入下一关生效。'); // 重建游戏实例
+      } catch (err) {
+        console.warn('[Stage2048] 读取关卡包文件失败：', err); // 控制台记录读取异常
+        window.alert('关卡包读取失败，请查看控制台详情。'); // 提示用户读取失败
+        updateLevelPackTip('关卡包读取失败，请稍后重试。'); // 提示区域给出建议
+        announce('关卡包导入失败');                   // 播报导入失败
+      } finally {
+        e.target.value = '';                            // 重置文件输入以便重复选择
+      }
+    });
+  }
+  if (btnPackClear) {                                   // 绑定关卡包清除按钮
+    btnPackClear.addEventListener('click', () => {
+      clearLevelPackStorage();                          // 移除关卡包存储
+      clearLevelPackIndex();                            // 移除索引存储
+      levelPackState.pack = null;                       // 清空运行时配置
+      levelPackState.index = 0;                         // 重置索引
+      rebuildAfterLevelPackChange('已清除关卡包，恢复默认推进方式。', '关卡包已清除，按默认尺寸推进。'); // 重建游戏并提示
+    });
+  }
   inputDemo.addEventListener('change', (e) => {
     if (e.target.checked) startDemo();                 // 勾选即开启演示
     else stopDemo('演示模式已关闭');                   // 取消勾选则关闭演示

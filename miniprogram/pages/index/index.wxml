@@ -53,6 +53,17 @@
     <button class="btn" bindtap="onReplay" aria-label="重放复盘">重放复盘</button>
   </view>
 
+  <!-- 关卡包导入与清除按钮 -->
+  <view class="row">
+    <button class="btn" bindtap="onImportPack" aria-label="从剪贴板导入关卡包">导入关卡包</button>
+    <button class="btn" bindtap="onClearPack" aria-label="清除关卡包">清除关卡包</button>
+  </view>
+
+  <!-- 关卡包状态提示 -->
+  <view class="row pack-tip-row">
+    <text class="meta pack-tip" aria-role="note" aria-label="关卡包状态 {{packStatus}}">{{packStatus}}</text>
+  </view>
+
   <!-- 状态播报区域，使用 aria-role="status" 供朗读 -->
   <view class="sr-only" aria-role="status" aria-live="polite">{{statusText}}</view>
 </view>
