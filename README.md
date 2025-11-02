@@ -60,6 +60,16 @@ if (manager.checkPass()) {
 - `/core/config.schema.md` 与 `/docs/CONFIG_GUIDE.md` 详细列出可配置字段及其载入优先级，默认配置在 Web 与小程序端自动加载。
 - **Web 端**：使用 `localStorage` 存储设置（`stage2048.settings.v2`）、进度（`stage2048.progress.v2`）与最佳分（`stage2048.bestScore.v1`），支持 URL Query 覆盖以及导入/导出 JSON。
 - **小程序端**：使用 `wx.setStorageSync`/`wx.getStorageSync` 存储设置（`stage2048.mp.settings.v2`）、进度（`stage2048.mp.progress.v2`）与最佳分（`stage2048.mp.bestScore.v1`），并提供“重置进度”“清空最佳分”按钮。
+<!-- 规则编辑器章节标题 -->
+## 规则编辑器
+<!-- 规则编辑器入口说明 -->
+- Web 主页面的设置面板新增「打开规则编辑器」链接，指向 `/web/rules.html`，可在新窗口中管理 JSON 规则。
+<!-- 规则编辑器功能说明 -->
+- 规则编辑器提供基础设置、LEVELS 选项与随机权重表单，可导出 `.json` 文件、从文件导入并写入 `localStorage['stage2048.settings.v2']`。
+<!-- 规则编辑器校验说明 -->
+- 表单内置尺寸范围与概率和校验，随机权重支持动态增删尺寸与权重项，保存时会提醒新规则可能影响现有进度。
+<!-- 规则编辑器使用建议 -->
+- 导入时会自动合并默认值并显示错误列表；应用后返回 `/web/index.html` 刷新即可生效，建议必要时在主页面重置进度。
 
 ## 撤销与复盘
 - 核心 `Game2048` 支持 `peekState()` 与 `restoreState()`，`LevelManager` 增强为可生成 `snapshot()` 并通过 `restore()` 恢复，用于撤销与复盘脚本。

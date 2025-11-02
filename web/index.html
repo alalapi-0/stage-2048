@@ -129,9 +129,13 @@
               <span>导入设置/进度（选择文件）</span>
               <input type="file" id="input-import" accept="application/json" aria-label="选择导入的 JSON 文件" />
             </label>
+            <!-- 新增入口链接，跳转至规则编辑器页面 -->
+            <a href="./rules.html" class="import-btn" style="text-decoration:none;" aria-label="打开规则编辑器">打开规则编辑器</a>
           </div>
         </form>
         <p>提示：修改表单会立即保存并重置当前关卡；导入与重置操作会覆盖现有进度与设置。</p>
+        <!-- 提示用户可单独打开新页面编辑规则 -->
+        <p>可在新窗口打开规则编辑器编辑 JSON 规则，保存后返回本页刷新即可生效。</p>
       </section>
     </main>
 
