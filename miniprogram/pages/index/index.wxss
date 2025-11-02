@@ -54,6 +54,17 @@ page { background: #faf8ef; }
 
 .demo-switch { transform: scale(0.9); } /* 略微缩小开关，避免占用过多空间 */
 
+.pack-tip-row {                    /* 关卡包提示容器，限制最大宽度便于阅读 */
+  max-width: 640rpx;
+}
+
+.pack-tip {                        /* 关卡包提示文本样式 */
+  font-size: 24rpx;
+  color: #8f7a66;
+  line-height: 1.4;
+  text-align: center;
+}
+
 .sr-only {
   position: absolute;               /* 绝对定位隐藏 */
   width: 1px;

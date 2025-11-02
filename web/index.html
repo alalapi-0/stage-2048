@@ -132,6 +132,18 @@
             <!-- 新增入口链接，跳转至规则编辑器页面 -->
             <a href="./rules.html" class="import-btn" style="text-decoration:none;" aria-label="打开规则编辑器">打开规则编辑器</a>
           </div>
+          <!-- 关卡包操作按钮行，提供导入与清除能力 -->
+          <div class="row" style="margin-top: 8px;">
+            <!-- 使用标签包装文件输入，使其视觉上与按钮一致 -->
+            <label class="import-btn" aria-label="导入关卡包">
+              <span>导入关卡包（JSON）</span>
+              <input type="file" id="btn-pack" accept="application/json" aria-label="选择关卡包 JSON 文件" />
+            </label>
+            <!-- 清除按钮用于移除已保存的关卡包配置 -->
+            <button type="button" id="btn-pack-clear" aria-label="清除关卡包">清除关卡包</button>
+            <!-- 提示区域展示当前关卡包状态 -->
+            <div id="pack-tip" class="meta" aria-live="polite" aria-label="关卡包状态提示"></div>
+          </div>
         </form>
         <p>提示：修改表单会立即保存并重置当前关卡；导入与重置操作会覆盖现有进度与设置。</p>
         <!-- 提示用户可单独打开新页面编辑规则 -->
